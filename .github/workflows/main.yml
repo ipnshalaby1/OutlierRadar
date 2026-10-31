@@ -19,7 +19,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb
-          npm install playwright-extra puppeteer-extra-plugin-stealth axios playwright ghost-cursor
+          npm install playwright-extra puppeteer-extra-plugin-stealth axios playwright
           npx playwright install --with-deps chromium
 
       - name: Run Nuclear Bypass Script
@@ -28,13 +28,11 @@ jobs:
           CHAT_ID: ${{ secrets.CHAT_ID }}
           EMAIL: ${{ secrets.EMAIL }}
           PASSWORD: ${{ secrets.PASSWORD }}
-        # تشغيل المتصفح داخل شاشة وهمية لتخطي فحص Headless
         run: |
           xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" node -e '
           const { chromium } = require("playwright-extra");
           const stealth = require("puppeteer-extra-plugin-stealth")();
           chromium.use(stealth);
-          const { createCursor } = require("ghost-cursor");
           const axios = require("axios");
 
           async function sendTelegram(text) {
@@ -44,7 +42,6 @@ jobs:
 
           (async () => {
               console.log("🖥️ 1. Launching Real Browser in Virtual Display...");
-              // المتصفح يعمل بشكل مرئي كامل بدون تخفي Headless
               const browser = await chromium.launch({ 
                   headless: false, 
                   args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"] 
@@ -55,54 +52,49 @@ jobs:
                   userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
               });
               const page = await context.newPage();
-              
-              console.log("👻 2. Activating Ghost Cursor...");
-              const cursor = createCursor(page);
 
               try {
-                  console.log("🌐 3. Navigating to SIGN-IN page...");
+                  console.log("🌐 2. Navigating to SIGN-IN page...");
                   await page.goto("https://www.multimango.com/sign-in", { waitUntil: "networkidle" });
                   
-                  console.log("⏳ 4. Waiting for Cloudflare/Clerk checks to pass...");
+                  console.log("⏳ 3. Waiting for Cloudflare/Clerk checks to pass...");
                   await page.waitForTimeout(8000);
 
-                  console.log("✅ 5. Human-clicking the Terms Checkbox...");
-                  // محاولة الضغط على المربع باستخدام دوره كـ checkbox
-                  const checkbox = page.getByRole("checkbox");
-                  await cursor.click(checkbox).catch(async () => {
-                      console.log("   -> Fallback: Clicking text instead");
-                      // كبديل، محاولة الضغط على النص
-                      const termsTarget = page.locator("text=I agree").first();
-                      await cursor.click(termsTarget);
+                  console.log("✅ 4. Clicking the Terms...");
+                  // استخدام النقر الطبيعي لـ Playwright
+                  const termsTarget = page.locator("text=I agree").first();
+                  await termsTarget.click().catch(async () => {
+                      console.log("   -> Fallback to role checkbox");
+                      await page.getByRole("checkbox").first().click({ force: true });
                   });
                   await page.waitForTimeout(2000);
 
-                  console.log("📧 6. Human-typing Email...");
+                  console.log("📧 5. Typing Email...");
                   const emailInput = page.locator("input[type=\"email\"], input[name=\"identifier\"]").first();
-                  await cursor.click(emailInput);
+                  await emailInput.click();
                   await emailInput.fill(process.env.EMAIL);
                   await page.waitForTimeout(1500);
 
-                  console.log("👉 7. Human-clicking Continue...");
+                  console.log("👉 6. Clicking Continue...");
                   const continueBtn1 = page.locator("button:has-text(\"Continue\")").first();
-                  await cursor.click(continueBtn1);
+                  await continueBtn1.click();
                   
-                  console.log("🔐 8. Waiting for Password field...");
-                  await page.waitForTimeout(5000); // انتظار الشاشة التانية زي الفيديو
+                  console.log("🔐 7. Waiting for Password field...");
+                  await page.waitForTimeout(5000);
                   
                   const passInput = page.locator("input[type=\"password\"]").first();
-                  await cursor.click(passInput);
+                  await passInput.click();
                   await passInput.fill(process.env.PASSWORD);
                   await page.waitForTimeout(1500);
 
-                  console.log("👉 9. Human-clicking Continue (Login)...");
+                  console.log("👉 8. Clicking Continue (Login)...");
                   const continueBtn2 = page.locator("button:has-text(\"Continue\")").last();
-                  await cursor.click(continueBtn2);
+                  await continueBtn2.click();
 
-                  console.log("⏳ 10. Waiting for Clerk session redirect...");
+                  console.log("⏳ 9. Waiting for Clerk session redirect...");
                   await page.waitForTimeout(15000);
 
-                  console.log("🎯 11. Hitting the API...");
+                  console.log("🎯 10. Hitting the API...");
                   await page.goto("https://www.multimango.com/api/omni-elo?capability=tts", { waitUntil: "networkidle" });
 
                   const body = await page.locator("body").innerText();
