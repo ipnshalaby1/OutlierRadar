@@ -37,111 +37,63 @@ jobs:
           }
 
           (async () => {
-              console.log("1. Starting browser (Advanced Stealth mode)...");
+              console.log("1. Starting browser (Human Simulation Mode)...");
               const browser = await puppeteer.launch({
                   headless: true,
                   args: ["--no-sandbox", "--disable-setuid-sandbox"]
               });
               const page = await browser.newPage();
-              
               await page.setViewport({ width: 1280, height: 800 });
 
               try {
-                  console.log("2. Navigating to login...");
+                  console.log("2. Navigating to login page...");
                   await page.goto("https://www.multimango.com/login", { waitUntil: "networkidle0", timeout: 60000 });
 
-                  console.log("3. Waiting for form elements to stabilize...");
+                  console.log("3. Waiting for Clerk to fully load...");
+                  await new Promise(r => setTimeout(r, 8000));
+
+                  console.log("4. Executing Blind Human Bypass sequence...");
+                  
+                  // التركيز على الصفحة لتفعيل الكيبورد
+                  await page.bringToFront();
+                  await page.mouse.click(10, 10); // كليك عشوائي في زاوية الشاشة لتفعيل النافذة
+                  await new Promise(r => setTimeout(r, 1000));
+
+                  // الخطوة 1: الضغط على Tab للوصول لمربع الشروط (عادة يكون أول عنصر)
+                  await page.keyboard.press("Tab");
+                  await new Promise(r => setTimeout(r, 1000));
+                  
+                  // الخطوة 2: الموافقة على الشروط
+                  await page.keyboard.press("Space");
+                  console.log("   -> Pressed Space for terms.");
+                  await new Promise(r => setTimeout(r, 2000)); // انتظار الأنميشن
+
+                  // الخطوة 3: التنقل لحقل الإيميل (غالباً يحتاج ضغطة Tab واحدة أو اثنتين بعد الشروط)
+                  await page.keyboard.press("Tab");
+                  await new Promise(r => setTimeout(r, 500));
+                  
+                  // الخطوة 4: كتابة الإيميل (الكتابة تتم في العنصر النشط حالياً أياً كان اسمه!)
+                  await page.keyboard.type(process.env.EMAIL, { delay: 50 });
+                  console.log("   -> Typed Email.");
+                  await new Promise(r => setTimeout(r, 1000));
+                  await page.keyboard.press("Enter");
+                  console.log("   -> Pressed Enter after Email.");
+
+                  // الخطوة 5: انتظار تحميل صفحة الباسورد
                   await new Promise(r => setTimeout(r, 5000));
 
-                  console.log("4. Attempting to accept terms...");
-                  try {
-                      // محاولة أولى للبحث عن الزر أو المربع
-                      const agreed = await page.evaluate(() => {
-                          const checkbox = document.querySelector("input[type=\"checkbox\"]");
-                          if (checkbox) {
-                              checkbox.click();
-                              return true;
-                          }
-                          const labels = Array.from(document.querySelectorAll("label, span, div, p"));
-                          const agreeText = labels.find(el => el.textContent && el.textContent.toLowerCase().includes("i agree"));
-                          if (agreeText) {
-                              agreeText.click();
-                              return true;
-                          }
-                          return false;
-                      });
-                      if (agreed) {
-                          console.log("Terms accepted via DOM manipulation.");
-                      } else {
-                          console.log("Terms checkbox not found via DOM. Proceeding...");
-                      }
-                  } catch (e) {
-                      console.log("Error finding terms:", e.message);
-                  }
-
-                  await new Promise(r => setTimeout(r, 2000));
-
-                  console.log("5. Searching for email input...");
-                  const emailSelectors = [
-                      "input[type=\"email\"]",
-                      "input[name=\"identifier\"]",
-                      "input[name=\"email\"]",
-                      "input[autocomplete=\"username\"]",
-                      ".cl-formFieldInput"
-                  ];
-                  
-                  let emailFound = false;
-                  for (let selector of emailSelectors) {
-                      try {
-                          await page.waitForSelector(selector, { timeout: 3000 });
-                          await page.type(selector, process.env.EMAIL);
-                          console.log(`Email entered using selector: ${selector}`);
-                          emailFound = true;
-                          break;
-                      } catch (e) {
-                          // Ignore and try next selector
-                      }
-                  }
-
-                  if (!emailFound) {
-                      throw new Error("Could not find email input field after trying multiple selectors.");
-                  }
-                  
+                  // الخطوة 6: كتابة الباسورد
+                  // Clerk أحياناً يفقد التركيز بعد الإيميل، نعطيه Tab احتياطي لو لزم الأمر، لكن غالباً التركيز ينتقل تلقائياً للباسورد
+                  await page.keyboard.type(process.env.PASSWORD, { delay: 50 });
+                  console.log("   -> Typed Password.");
+                  await new Promise(r => setTimeout(r, 1000));
                   await page.keyboard.press("Enter");
+                  console.log("   -> Pressed Enter after Password.");
 
-                  console.log("6. Waiting for password field...");
-                  await new Promise(r => setTimeout(r, 5000));
-                  
-                  console.log("7. Searching for password input...");
-                  const passwordSelectors = [
-                      "input[type=\"password\"]",
-                      "input[name=\"password\"]",
-                      "input[autocomplete=\"current-password\"]"
-                  ];
+                  console.log("5. Waiting for authentication...");
+                  await new Promise(r => setTimeout(r, 10000));
 
-                  let passwordFound = false;
-                  for (let selector of passwordSelectors) {
-                      try {
-                          await page.waitForSelector(selector, { timeout: 3000 });
-                          await page.type(selector, process.env.PASSWORD);
-                          console.log(`Password entered using selector: ${selector}`);
-                          passwordFound = true;
-                          break;
-                      } catch (e) {
-                          // Ignore and try next
-                      }
-                  }
-
-                  if (!passwordFound) {
-                      throw new Error("Could not find password input field.");
-                  }
-
-                  await page.keyboard.press("Enter");
-
-                  console.log("8. Authenticating...");
-                  await new Promise(r => setTimeout(r, 10000)); // وقت أطول لانتظار التحويل بعد الدخول
-
-                  console.log("9. Checking target API...");
+                  console.log("6. Checking target API...");
                   await page.goto("https://www.multimango.com/api/omni-elo?capability=tts", { waitUntil: "networkidle2" });
 
                   const body = await page.evaluate(() => document.body.innerText);
@@ -153,7 +105,7 @@ jobs:
                       await sendTelegram("omni task online 🟢");
                       console.log("Result: Task detected! Telegram alerted.");
                   } else {
-                      console.log("Result: Unknown response structure. Full body length:", body.length);
+                      console.log("Result: Unknown response. Body length:", body.length);
                   }
               } catch (err) {
                   console.error("Execution failed at:", err.message);
