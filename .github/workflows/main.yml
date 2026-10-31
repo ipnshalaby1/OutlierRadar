@@ -1,4 +1,4 @@
-name: Outlier Radar Bot
+name: Outlier Radar Bot (API Direct)
 
 on:
   schedule:
@@ -8,31 +8,22 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-
     steps:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install Ultimate Bypass Tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb
-          npm install playwright-extra puppeteer-extra-plugin-stealth axios playwright
-          npx playwright install --with-deps chromium
+      - name: Install Axios
+        run: npm install axios
 
-      - name: Run Nuclear Bypass Script
+      - name: Run Direct API Bypass
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
-          EMAIL: ${{ secrets.EMAIL }}
-          PASSWORD: ${{ secrets.PASSWORD }}
+          COOKIE: ${{ secrets.COOKIE }}
         run: |
-          xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" node -e '
-          const { chromium } = require("playwright-extra");
-          const stealth = require("puppeteer-extra-plugin-stealth")();
-          chromium.use(stealth);
+          node -e '
           const axios = require("axios");
 
           async function sendTelegram(text) {
@@ -41,79 +32,41 @@ jobs:
           }
 
           (async () => {
-              console.log("🖥️ 1. Launching Real Browser in Virtual Display...");
-              const browser = await chromium.launch({ 
-                  headless: false, 
-                  args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"] 
-              });
+              console.log("🚀 Starting Direct API Bypass (Cookie Auth)...");
               
-              const context = await browser.newContext({
-                  viewport: { width: 1280, height: 960 },
-                  userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-              });
-              const page = await context.newPage();
+              if (!process.env.COOKIE) {
+                  console.error("❌ ERROR: COOKIE secret is missing in GitHub!");
+                  process.exit(1);
+              }
 
               try {
-                  console.log("🌐 2. Navigating to SIGN-IN page...");
-                  await page.goto("https://www.multimango.com/sign-in", { waitUntil: "networkidle" });
-                  
-                  console.log("⏳ 3. Waiting for Cloudflare/Clerk checks to pass...");
-                  await page.waitForTimeout(8000);
-
-                  console.log("✅ 4. Clicking the Terms...");
-                  // استخدام النقر الطبيعي لـ Playwright
-                  const termsTarget = page.locator("text=I agree").first();
-                  await termsTarget.click().catch(async () => {
-                      console.log("   -> Fallback to role checkbox");
-                      await page.getByRole("checkbox").first().click({ force: true });
+                  const response = await axios.get("https://www.multimango.com/api/omni-elo?capability=tts", {
+                      headers: {
+                          "Cookie": process.env.COOKIE,
+                          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                      }
                   });
-                  await page.waitForTimeout(2000);
-
-                  console.log("📧 5. Typing Email...");
-                  const emailInput = page.locator("input[type=\"email\"], input[name=\"identifier\"]").first();
-                  await emailInput.click();
-                  await emailInput.fill(process.env.EMAIL);
-                  await page.waitForTimeout(1500);
-
-                  console.log("👉 6. Clicking Continue...");
-                  const continueBtn1 = page.locator("button:has-text(\"Continue\")").first();
-                  await continueBtn1.click();
                   
-                  console.log("🔐 7. Waiting for Password field...");
-                  await page.waitForTimeout(5000);
-                  
-                  const passInput = page.locator("input[type=\"password\"]").first();
-                  await passInput.click();
-                  await passInput.fill(process.env.PASSWORD);
-                  await page.waitForTimeout(1500);
-
-                  console.log("👉 8. Clicking Continue (Login)...");
-                  const continueBtn2 = page.locator("button:has-text(\"Continue\")").last();
-                  await continueBtn2.click();
-
-                  console.log("⏳ 9. Waiting for Clerk session redirect...");
-                  await page.waitForTimeout(15000);
-
-                  console.log("🎯 10. Hitting the API...");
-                  await page.goto("https://www.multimango.com/api/omni-elo?capability=tts", { waitUntil: "networkidle" });
-
-                  const body = await page.locator("body").innerText();
+                  // تحويل الرد إلى نص لسهولة الفحص
+                  const body = typeof response.data === "object" ? JSON.stringify(response.data) : response.data;
                   console.log("API Result Snippet:", body.substring(0, 150));
 
+                  // فحص النتيجة
                   if (body.includes("NO_LANGUAGE_MATCHES") || body.includes("No comparison candidates") || body.includes("errorCode")) {
                       console.log("Result: No tasks online.");
                   } else if (body.includes(".wav") || body.includes("scontent")) {
                       await sendTelegram("omni task online 🟢");
                       console.log("Result: Task detected! Telegram alerted.");
                   } else {
-                      console.log("Result: Unknown response.");
+                      console.log("Result: Unknown response structure.");
                   }
-
+                  
               } catch (err) {
-                  console.error("❌ Execution failed:", err.message);
-              } finally {
-                  await browser.close();
-                  console.log("🏁 Done.");
+                  if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+                      console.error("❌ HTTP " + err.response.status + ": Cookie expired or invalid! You need to update the COOKIE secret in GitHub.");
+                  } else {
+                      console.error("❌ Execution failed:", err.message);
+                  }
               }
           })();
           '
