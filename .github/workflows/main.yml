@@ -31,51 +31,58 @@ jobs:
 
           async function sendTelegram(text) {
               const url = `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`;
-              try {
-                  await axios.post(url, { chat_id: process.env.CHAT_ID, text: text });
-              } catch (e) {
-                  console.error("Telegram Error:", e.message);
-              }
+              try { await axios.post(url, { chat_id: process.env.CHAT_ID, text: text }); } catch (e) {}
           }
 
           (async () => {
-              console.log("1. Starting browser...");
-              const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+              console.log("1. Starting browser (Stealth mode)...");
+              const browser = await puppeteer.launch({
+                  headless: true,
+                  args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"]
+              });
               const page = await browser.newPage();
+              
+              // التخفي كمتصفح جوجل كروم حقيقي على ويندوز
+              await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
               try {
                   console.log("2. Navigating to login...");
                   await page.goto("https://www.multimango.com/login", { waitUntil: "networkidle2" });
 
-                  console.log("3. Handling Clerk Checkbox forcefully...");
-                  try {
-                      await page.waitForSelector("input[type=\"checkbox\"]", { timeout: 5000 });
-                      // الضغط الإجباري عبر الجافاسكريبت لتخطي حماية Clerk
-                      await page.evaluate(() => {
-                          const cb = document.querySelector("input[type=\"checkbox\"]");
-                          if(cb) cb.click();
-                      });
-                      console.log("Checkbox clicked forcefully.");
-                  } catch (e) {
-                      console.log("Checkbox not found, continuing...");
-                  }
+                  console.log("3. Waiting for Clerk form to load...");
+                  await new Promise(r => setTimeout(r, 6000));
 
-                  console.log("4. Typing email...");
-                  await page.waitForSelector("input[type=\"email\"]", { timeout: 6000 });
-                  await page.type("input[type=\"email\"]", process.env.EMAIL);
+                  // طباعة جزء من محتوى الصفحة لمعرفة ماذا يرى البوت
+                  const pageText = await page.evaluate(() => document.body.innerText);
+                  console.log("Page Content Snippet:", pageText.substring(0, 150).replace(/\n/g, " "));
+
+                  console.log("4. Trying to click Terms...");
+                  await page.evaluate(() => {
+                      const cb = document.querySelector("input[type=\"checkbox\"]");
+                      if(cb) cb.click();
+                      else {
+                         const labels = Array.from(document.querySelectorAll("label, span, div"));
+                         const target = labels.find(l => l.innerText && l.innerText.includes("I agree"));
+                         if(target) target.click();
+                      }
+                  });
+
+                  console.log("5. Typing email...");
+                  await page.waitForSelector("input[type=\"email\"], input[name=\"identifier\"]", { timeout: 8000 });
+                  await page.type("input[type=\"email\"], input[name=\"identifier\"]", process.env.EMAIL);
                   await page.keyboard.press("Enter");
 
-                  console.log("5. Waiting for password field...");
-                  // ننتظر حتى يظهر حقل الباسورد فعلياً في الصفحة
-                  await page.waitForSelector("input[type=\"password\"]", { timeout: 10000 });
+                  console.log("6. Waiting for password field...");
+                  await new Promise(r => setTimeout(r, 4000));
+                  await page.waitForSelector("input[type=\"password\"]", { timeout: 8000 });
                   console.log("Typing password...");
                   await page.type("input[type=\"password\"]", process.env.PASSWORD);
                   await page.keyboard.press("Enter");
 
-                  console.log("6. Waiting for session to authenticate...");
+                  console.log("7. Authenticating...");
                   await new Promise(r => setTimeout(r, 8000));
 
-                  console.log("7. Checking target API...");
+                  console.log("8. Checking target API...");
                   await page.goto("https://www.multimango.com/api/omni-elo?capability=tts", { waitUntil: "networkidle2" });
 
                   const body = await page.evaluate(() => document.body.innerText);
@@ -87,7 +94,7 @@ jobs:
                       await sendTelegram("omni task online 🟢");
                       console.log("Result: Task detected! Telegram alerted.");
                   } else {
-                      console.log("Result: Unknown response.");
+                      console.log("Result: Unknown response structure.");
                   }
               } catch (err) {
                   console.error("Execution failed at:", err.message);
