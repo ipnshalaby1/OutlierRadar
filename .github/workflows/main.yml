@@ -15,22 +15,19 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Virtual Display & Playwright
+      - name: Install Playwright & Stealth
         run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb
           npm install playwright-extra puppeteer-extra-plugin-stealth axios playwright
           npx playwright install --with-deps chromium
 
-      - name: Run Script in Virtual Monitor
+      - name: Run Bot (Correct URL)
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
           EMAIL: ${{ secrets.EMAIL }}
           PASSWORD: ${{ secrets.PASSWORD }}
-        # السطر القادم هو السحر: تشغيل نود داخل شاشة وهمية 
         run: |
-          xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" node -e '
+          node -e '
           const { chromium } = require("playwright-extra");
           const stealth = require("puppeteer-extra-plugin-stealth")();
           chromium.use(stealth);
@@ -42,32 +39,26 @@ jobs:
           }
 
           (async () => {
-              console.log("🖥️ 1. Starting Real Browser (Headed Mode) inside Virtual Monitor...");
-              // لاحظ: تم إغلاق وضع التخفي التقليدي، المتصفح يعمل بواجهة كاملة!
-              const browser = await chromium.launch({ 
-                  headless: false, 
-                  args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"] 
-              });
-              
+              console.log("🚀 1. Starting with the CORRECT URL...");
+              const browser = await chromium.launch({ headless: true });
               const context = await browser.newContext({
-                  viewport: { width: 1280, height: 960 },
-                  userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                  viewport: { width: 390, height: 844 },
+                  userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
               });
               const page = await context.newPage();
 
               try {
-                  console.log("🌐 2. Navigating to login...");
-                  await page.goto("https://www.multimango.com/login", { waitUntil: "networkidle" });
+                  console.log("🌐 2. Navigating to sign-in page...");
+                  // هنا التعديل العبقري بتاعك!
+                  await page.goto("https://www.multimango.com/sign-in", { waitUntil: "networkidle" });
                   
-                  console.log("⏳ 3. Waiting for Anti-Bot checks to pass naturally...");
-                  await page.waitForTimeout(8000);
+                  console.log("⏳ 3. Waiting for form to load...");
+                  await page.waitForTimeout(5000);
 
                   console.log("✅ 4. Clicking Checkbox...");
                   const checkbox = page.getByRole("checkbox");
-                  await checkbox.click({ force: true }).catch(() => console.log("Checkbox issue, ignoring..."));
-                  
-                  // انتظار أطول للسماح للصفحة البيضاء بالتحميل إذا ظهرت
-                  await page.waitForTimeout(4000);
+                  await checkbox.click({ force: true }).catch(() => console.log("   -> No checkbox found, moving on..."));
+                  await page.waitForTimeout(2000);
 
                   console.log("📧 5. Typing Email...");
                   const emailInput = page.locator("input[type=\"email\"], input[name=\"identifier\"]").first();
@@ -78,7 +69,7 @@ jobs:
                   await page.getByRole("button", { name: "Continue", exact: false }).first().click();
                   
                   console.log("🔐 7. Waiting for Password field...");
-                  await page.waitForTimeout(5000);
+                  await page.waitForTimeout(4000);
                   
                   const passInput = page.locator("input[type=\"password\"]");
                   await passInput.fill(process.env.PASSWORD);
@@ -88,7 +79,7 @@ jobs:
                   await page.getByRole("button", { name: "Continue", exact: false }).last().click();
 
                   console.log("⏳ 9. Waiting for redirect...");
-                  await page.waitForTimeout(15000);
+                  await page.waitForTimeout(12000);
 
                   console.log("🎯 10. Checking API...");
                   await page.goto("https://www.multimango.com/api/omni-elo?capability=tts", { waitUntil: "networkidle" });
@@ -96,7 +87,7 @@ jobs:
                   const body = await page.locator("body").innerText();
                   console.log("API Result Snippet:", body.substring(0, 150));
 
-                  if (body.includes("NO_LANGUAGE_MATCHES") || body.includes("No comparison candidates")) {
+                  if (body.includes("NO_LANGUAGE_MATCHES") || body.includes("No comparison candidates") || body.includes("errorCode")) {
                       console.log("Result: No tasks online.");
                   } else if (body.includes(".wav") || body.includes("scontent")) {
                       await sendTelegram("omni task online 🟢");
