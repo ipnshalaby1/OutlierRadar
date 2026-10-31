@@ -10,21 +10,89 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install Puppeteer and Axios
+        run: npm install puppeteer axios
 
-      - name: Run Bot
+      - name: Run Script Directly
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
           EMAIL: ${{ secrets.EMAIL }}
           PASSWORD: ${{ secrets.PASSWORD }}
-        run: node index.js
+        run: |
+          node -e '
+          const puppeteer = require("puppeteer");
+          const axios = require("axios");
+
+          async function sendTelegram(text) {
+              const url = `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`;
+              try {
+                  await axios.post(url, { chat_id: process.env.CHAT_ID, text: text });
+              } catch (e) {
+                  console.error("Telegram send error:", e.message);
+              }
+          }
+
+          (async () => {
+              console.log("1. Starting browser...");
+              const browser = await puppeteer.launch({
+                  headless: true,
+                  args: ["--no-sandbox", "--disable-setuid-sandbox"]
+              });
+              const page = await browser.newPage();
+
+              try {
+                  console.log("2. Navigating to login...");
+                  await page.goto("https://www.multimango.com/login", { waitUntil: "networkidle2" });
+
+                  try {
+                      console.log("3. Checking for terms checkbox...");
+                      await page.waitForSelector("input[type=\"checkbox\"]", { timeout: 4000 });
+                      await page.click("input[type=\"checkbox\"]");
+                      console.log("Terms checkbox clicked.");
+                  } catch (e) {
+                      console.log("Checkbox not present, proceeding to email...");
+                  }
+
+                  console.log("4. Typing email...");
+                  await page.waitForSelector("input[type=\"email\"]", { timeout: 6000 });
+                  await page.type("input[type=\"email\"]", process.env.EMAIL);
+                  await page.keyboard.press("Enter");
+
+                  await new Promise(r => setTimeout(r, 3000));
+
+                  console.log("5. Typing password...");
+                  await page.waitForSelector("input[type=\"password\"]", { timeout: 6000 });
+                  await page.type("input[type=\"password\"]", process.env.PASSWORD);
+                  await page.keyboard.press("Enter");
+
+                  console.log("6. Waiting for session to authenticate...");
+                  await new Promise(r => setTimeout(r, 6000));
+
+                  console.log("7. Checking target API...");
+                  await page.goto("https://www.multimango.com/api/omni-elo?capability=tts", { waitUntil: "networkidle2" });
+
+                  const body = await page.evaluate(() => document.body.innerText);
+                  console.log("API Result:", body.substring(0, 150));
+
+                  if (body.includes("NO_LANGUAGE_MATCHES") || body.includes("No comparison candidates")) {
+                      console.log("Result: No tasks online.");
+                  } else if (body.includes(".wav") || body.includes("scontent")) {
+                      await sendTelegram("omni task online 🟢");
+                      console.log("Result: Task detected! Telegram alerted.");
+                  } else {
+                      console.log("Result: Unexpected response structure.");
+                  }
+              } catch (err) {
+                  console.error("Execution failed at:", err.message);
+              } finally {
+                  await browser.close();
+                  console.log("Done.");
+              }
+          })();
+          '
