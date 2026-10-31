@@ -42,7 +42,6 @@ jobs:
               });
               const page = await browser.newPage();
               
-              // التخفي كمتصفح جوجل كروم حقيقي على ويندوز
               await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
               try {
@@ -52,31 +51,26 @@ jobs:
                   console.log("3. Waiting for Clerk form to load...");
                   await new Promise(r => setTimeout(r, 6000));
 
-                  // طباعة جزء من محتوى الصفحة لمعرفة ماذا يرى البوت
-                  const pageText = await page.evaluate(() => document.body.innerText);
-                  console.log("Page Content Snippet:", pageText.substring(0, 150).replace(/\n/g, " "));
-
-                  console.log("4. Trying to click Terms...");
-                  await page.evaluate(() => {
-                      const cb = document.querySelector("input[type=\"checkbox\"]");
-                      if(cb) cb.click();
-                      else {
-                         const labels = Array.from(document.querySelectorAll("label, span, div"));
-                         const target = labels.find(l => l.innerText && l.innerText.includes("I agree"));
-                         if(target) target.click();
-                      }
-                  });
+                  console.log("4. Attempting Keyboard bypass for Terms...");
+                  // الضغط على زر التاب ثم المسطرة للموافقة على الشروط
+                  await page.keyboard.press("Tab");
+                  await new Promise(r => setTimeout(r, 500));
+                  await page.keyboard.press("Space");
+                  await new Promise(r => setTimeout(r, 1000));
+                  await page.keyboard.press("Enter");
+                  await new Promise(r => setTimeout(r, 2000));
 
                   console.log("5. Typing email...");
-                  await page.waitForSelector("input[type=\"email\"], input[name=\"identifier\"]", { timeout: 8000 });
-                  await page.type("input[type=\"email\"], input[name=\"identifier\"]", process.env.EMAIL);
+                  // نستخدم محددات Clerk الخاصة
+                  await page.waitForSelector("input[name=\"identifier\"], input[type=\"email\"]", { timeout: 8000 });
+                  await page.type("input[name=\"identifier\"], input[type=\"email\"]", process.env.EMAIL);
                   await page.keyboard.press("Enter");
 
                   console.log("6. Waiting for password field...");
                   await new Promise(r => setTimeout(r, 4000));
-                  await page.waitForSelector("input[type=\"password\"]", { timeout: 8000 });
+                  await page.waitForSelector("input[name=\"password\"], input[type=\"password\"]", { timeout: 8000 });
                   console.log("Typing password...");
-                  await page.type("input[type=\"password\"]", process.env.PASSWORD);
+                  await page.type("input[name=\"password\"], input[type=\"password\"]", process.env.PASSWORD);
                   await page.keyboard.press("Enter");
 
                   console.log("7. Authenticating...");
