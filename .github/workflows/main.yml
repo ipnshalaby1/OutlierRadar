@@ -50,52 +50,51 @@ jobs:
                   await page.goto("https://www.multimango.com/login", { waitUntil: "networkidle0", timeout: 60000 });
 
                   console.log("3. Waiting for Clerk to fully load...");
-                  await new Promise(r => setTimeout(r, 8000));
+                  await new Promise(r => setTimeout(r, 10000)); // زيادة وقت الانتظار الأولي
 
                   console.log("4. Executing Blind Human Bypass sequence...");
                   
                   // التركيز على الصفحة لتفعيل الكيبورد
                   await page.bringToFront();
                   await page.mouse.click(10, 10);
-                  await new Promise(r => setTimeout(r, 1000));
+                  await new Promise(r => setTimeout(r, 2000));
 
                   // الخطوة 1: الضغط على Tab للوصول لمربع الشروط
                   await page.keyboard.press("Tab");
-                  await new Promise(r => setTimeout(r, 1000));
+                  await new Promise(r => setTimeout(r, 1500));
                   
                   // الخطوة 2: الموافقة على الشروط
                   await page.keyboard.press("Space");
                   console.log("   -> Pressed Space for terms.");
-                  await new Promise(r => setTimeout(r, 2000));
+                  await new Promise(r => setTimeout(r, 3000)); // زيادة وقت الانتظار بعد قبول الشروط
 
                   // الخطوة 3: التنقل لحقل الإيميل
                   await page.keyboard.press("Tab");
-                  await new Promise(r => setTimeout(r, 500));
-                  
-                  // الخطوة 4: كتابة الإيميل
-                  await page.keyboard.type(process.env.EMAIL, { delay: 50 });
-                  console.log("   -> Typed Email.");
                   await new Promise(r => setTimeout(r, 1000));
+                  
+                  // الخطوة 4: كتابة الإيميل (إبطاء سرعة الكتابة)
+                  await page.keyboard.type(process.env.EMAIL, { delay: 100 });
+                  console.log("   -> Typed Email.");
+                  await new Promise(r => setTimeout(r, 2000)); // انتظار أطول قبل ضغط Enter
                   await page.keyboard.press("Enter");
                   console.log("   -> Pressed Enter after Email.");
 
                   // الخطوة 5: انتظار تحميل صفحة الباسورد
-                  await new Promise(r => setTimeout(r, 5000));
+                  await new Promise(r => setTimeout(r, 8000)); // زيادة وقت الانتظار لصفحة الباسورد
 
-                  // الخطوة 6: كتابة الباسورد
-                  await page.keyboard.type(process.env.PASSWORD, { delay: 50 });
+                  // الخطوة 6: كتابة الباسورد (إبطاء سرعة الكتابة)
+                  await page.keyboard.type(process.env.PASSWORD, { delay: 100 });
                   console.log("   -> Typed Password.");
-                  await new Promise(r => setTimeout(r, 1000));
+                  await new Promise(r => setTimeout(r, 2000)); // انتظار أطول قبل ضغط Enter
                   
-                  // تجهيز انتظار التحميل قبل ضغط الانتر للباسورد
                   const navigationPromise = page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30000 }).catch(() => null);
                   
                   await page.keyboard.press("Enter");
                   console.log("   -> Pressed Enter after Password.");
 
                   console.log("5. Waiting for authentication and redirect...");
-                  await navigationPromise; // ننتظر حتى يحمل الموقع الصفحة الرئيسية
-                  await new Promise(r => setTimeout(r, 8000)); // وقت إضافي كضمان
+                  await navigationPromise;
+                  await new Promise(r => setTimeout(r, 10000)); // زيادة وقت الانتظار بعد التوجيه
 
                   console.log("6. Checking target API...");
                   await page.goto("https://www.multimango.com/api/omni-elo?capability=tts", { waitUntil: "networkidle2" });
