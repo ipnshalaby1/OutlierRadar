@@ -15,22 +15,26 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Playwright & Stealth
+      - name: Install Ultimate Bypass Tools
         run: |
-          npm install playwright-extra puppeteer-extra-plugin-stealth axios playwright
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          npm install playwright-extra puppeteer-extra-plugin-stealth axios playwright ghost-cursor
           npx playwright install --with-deps chromium
 
-      - name: Run Bot (Correct URL)
+      - name: Run Nuclear Bypass Script
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
           EMAIL: ${{ secrets.EMAIL }}
           PASSWORD: ${{ secrets.PASSWORD }}
+        # تشغيل المتصفح داخل شاشة وهمية لتخطي فحص Headless
         run: |
-          node -e '
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" node -e '
           const { chromium } = require("playwright-extra");
           const stealth = require("puppeteer-extra-plugin-stealth")();
           chromium.use(stealth);
+          const { createCursor } = require("ghost-cursor");
           const axios = require("axios");
 
           async function sendTelegram(text) {
@@ -39,49 +43,63 @@ jobs:
           }
 
           (async () => {
-              console.log("🚀 1. Starting with the CORRECT URL...");
-              const browser = await chromium.launch({ headless: true });
+              console.log("🖥️ 1. Launching Real Browser in Virtual Display...");
+              // المتصفح يعمل بشكل مرئي كامل بدون تخفي Headless
+              const browser = await chromium.launch({ 
+                  headless: false, 
+                  args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"] 
+              });
+              
               const context = await browser.newContext({
-                  viewport: { width: 390, height: 844 },
-                  userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
+                  viewport: { width: 1280, height: 960 },
+                  userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
               });
               const page = await context.newPage();
+              
+              console.log("👻 2. Activating Ghost Cursor...");
+              const cursor = createCursor(page);
 
               try {
-                  console.log("🌐 2. Navigating to sign-in page...");
-                  // هنا التعديل العبقري بتاعك!
+                  console.log("🌐 3. Navigating to SIGN-IN page...");
                   await page.goto("https://www.multimango.com/sign-in", { waitUntil: "networkidle" });
                   
-                  console.log("⏳ 3. Waiting for form to load...");
-                  await page.waitForTimeout(5000);
+                  console.log("⏳ 4. Waiting for Cloudflare/Clerk checks to pass...");
+                  await page.waitForTimeout(8000);
 
-                  console.log("✅ 4. Clicking Checkbox...");
-                  const checkbox = page.getByRole("checkbox");
-                  await checkbox.click({ force: true }).catch(() => console.log("   -> No checkbox found, moving on..."));
+                  console.log("✅ 5. Human-clicking the Terms...");
+                  const termsTarget = page.locator("text=I agree").first();
+                  await cursor.click(termsTarget).catch(async () => {
+                      console.log("   -> Fallback to role checkbox");
+                      await cursor.click(page.getByRole("checkbox").first());
+                  });
                   await page.waitForTimeout(2000);
 
-                  console.log("📧 5. Typing Email...");
+                  console.log("📧 6. Human-typing Email...");
                   const emailInput = page.locator("input[type=\"email\"], input[name=\"identifier\"]").first();
+                  await cursor.click(emailInput);
                   await emailInput.fill(process.env.EMAIL);
-                  await page.waitForTimeout(1000);
+                  await page.waitForTimeout(1500);
 
-                  console.log("👉 6. Clicking Continue...");
-                  await page.getByRole("button", { name: "Continue", exact: false }).first().click();
+                  console.log("👉 7. Human-clicking Continue...");
+                  const continueBtn1 = page.locator("button:has-text(\"Continue\")").first();
+                  await cursor.click(continueBtn1);
                   
-                  console.log("🔐 7. Waiting for Password field...");
-                  await page.waitForTimeout(4000);
+                  console.log("🔐 8. Waiting for Password field...");
+                  await page.waitForTimeout(5000);
                   
-                  const passInput = page.locator("input[type=\"password\"]");
+                  const passInput = page.locator("input[type=\"password\"]").first();
+                  await cursor.click(passInput);
                   await passInput.fill(process.env.PASSWORD);
-                  await page.waitForTimeout(1000);
+                  await page.waitForTimeout(1500);
 
-                  console.log("👉 8. Clicking Continue (Login)...");
-                  await page.getByRole("button", { name: "Continue", exact: false }).last().click();
+                  console.log("👉 9. Human-clicking Continue (Login)...");
+                  const continueBtn2 = page.locator("button:has-text(\"Continue\")").last();
+                  await cursor.click(continueBtn2);
 
-                  console.log("⏳ 9. Waiting for redirect...");
-                  await page.waitForTimeout(12000);
+                  console.log("⏳ 10. Waiting for Clerk session redirect...");
+                  await page.waitForTimeout(15000);
 
-                  console.log("🎯 10. Checking API...");
+                  console.log("🎯 11. Hitting the API...");
                   await page.goto("https://www.multimango.com/api/omni-elo?capability=tts", { waitUntil: "networkidle" });
 
                   const body = await page.locator("body").innerText();
