@@ -15,10 +15,12 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Puppeteer and Stealth Plugin
-        run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth axios
+      - name: Install Playwright, Ghost Cursor, and Axios
+        run: |
+          npm install playwright ghost-cursor axios
+          npx playwright install --with-deps chromium
 
-      - name: Run Script Directly
+      - name: Run Heavy Weapons Script
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
@@ -26,9 +28,8 @@ jobs:
           PASSWORD: ${{ secrets.PASSWORD }}
         run: |
           node -e '
-          const puppeteer = require("puppeteer-extra");
-          const StealthPlugin = require("puppeteer-extra-plugin-stealth");
-          puppeteer.use(StealthPlugin());
+          const { chromium } = require("playwright");
+          const { createCursor } = require("ghost-cursor");
           const axios = require("axios");
 
           async function sendTelegram(text) {
@@ -37,86 +38,84 @@ jobs:
           }
 
           (async () => {
-              console.log("1. Starting browser (Human Simulation Mode)...");
-              const browser = await puppeteer.launch({
-                  headless: true,
-                  args: ["--no-sandbox", "--disable-setuid-sandbox"]
+              console.log("🚀 1. Launching Playwright...");
+              const browser = await chromium.launch({ headless: true });
+              const context = await browser.newContext({
+                  userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                  viewport: { width: 1280, height: 800 }
               });
-              const page = await browser.newPage();
-              await page.setViewport({ width: 1280, height: 800 });
+              const page = await context.newPage();
+              
+              console.log("👻 2. Activating Ghost Cursor...");
+              const cursor = createCursor(page);
 
               try {
-                  console.log("2. Navigating to login page...");
-                  await page.goto("https://www.multimango.com/login", { waitUntil: "networkidle0", timeout: 60000 });
+                  console.log("🌐 3. Navigating to login...");
+                  await page.goto("https://www.multimango.com/login", { waitUntil: "networkidle" });
+                  await page.waitForTimeout(6000);
 
-                  console.log("3. Waiting for Clerk to fully load...");
-                  await new Promise(r => setTimeout(r, 10000)); // زيادة وقت الانتظار الأولي
-
-                  console.log("4. Executing Blind Human Bypass sequence...");
+                  console.log("✅ 4. Hunting for Terms by Text...");
+                  try {
+                      // Playwright يخترق الصناديق ويبحث بالنص
+                      const termsEl = await page.$("text=/I agree/i");
+                      if (termsEl) {
+                          await cursor.click(termsEl);
+                          console.log("   -> Ghost Cursor clicked Terms!");
+                          await page.waitForTimeout(2000);
+                      }
+                  } catch (e) {
+                      console.log("   -> Terms not found, moving on.");
+                  }
                   
-                  // التركيز على الصفحة لتفعيل الكيبورد
-                  await page.bringToFront();
-                  await page.mouse.click(10, 10);
-                  await new Promise(r => setTimeout(r, 2000));
-
-                  // الخطوة 1: الضغط على Tab للوصول لمربع الشروط
-                  await page.keyboard.press("Tab");
-                  await new Promise(r => setTimeout(r, 1500));
+                  console.log("📧 5. Hunting for Email field...");
+                  const emailEl = await page.$("input[type=\"email\"], input[name=\"identifier\"]");
+                  if (emailEl) {
+                      await cursor.click(emailEl);
+                      console.log("   -> Ghost Cursor clicked Email.");
+                      await emailEl.type(process.env.EMAIL, { delay: 150 });
+                      await page.keyboard.press("Enter");
+                  } else {
+                      throw new Error("Email field not found!");
+                  }
                   
-                  // الخطوة 2: الموافقة على الشروط
-                  await page.keyboard.press("Space");
-                  console.log("   -> Pressed Space for terms.");
-                  await new Promise(r => setTimeout(r, 3000)); // زيادة وقت الانتظار بعد قبول الشروط
+                  console.log("🔐 6. Hunting for Password field...");
+                  await page.waitForTimeout(5000);
+                  const passEl = await page.$("input[type=\"password\"], input[name=\"password\"]");
+                  if (passEl) {
+                      await cursor.click(passEl);
+                      console.log("   -> Ghost Cursor clicked Password.");
+                      await passEl.type(process.env.PASSWORD, { delay: 150 });
+                      await page.keyboard.press("Enter");
+                  } else {
+                      throw new Error("Password field not found!");
+                  }
 
-                  // الخطوة 3: التنقل لحقل الإيميل
-                  await page.keyboard.press("Tab");
-                  await new Promise(r => setTimeout(r, 1000));
-                  
-                  // الخطوة 4: كتابة الإيميل (إبطاء سرعة الكتابة)
-                  await page.keyboard.type(process.env.EMAIL, { delay: 100 });
-                  console.log("   -> Typed Email.");
-                  await new Promise(r => setTimeout(r, 2000)); // انتظار أطول قبل ضغط Enter
-                  await page.keyboard.press("Enter");
-                  console.log("   -> Pressed Enter after Email.");
+                  console.log("⏳ 7. Waiting for Clerk authentication...");
+                  await page.waitForTimeout(15000); // انتظار 15 ثانية للتحويل الكامل
 
-                  // الخطوة 5: انتظار تحميل صفحة الباسورد
-                  await new Promise(r => setTimeout(r, 8000)); // زيادة وقت الانتظار لصفحة الباسورد
+                  console.log("🎯 8. Hitting the API...");
+                  await page.goto("https://www.multimango.com/api/omni-elo?capability=tts", { waitUntil: "networkidle" });
 
-                  // الخطوة 6: كتابة الباسورد (إبطاء سرعة الكتابة)
-                  await page.keyboard.type(process.env.PASSWORD, { delay: 100 });
-                  console.log("   -> Typed Password.");
-                  await new Promise(r => setTimeout(r, 2000)); // انتظار أطول قبل ضغط Enter
-                  
-                  const navigationPromise = page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30000 }).catch(() => null);
-                  
-                  await page.keyboard.press("Enter");
-                  console.log("   -> Pressed Enter after Password.");
-
-                  console.log("5. Waiting for authentication and redirect...");
-                  await navigationPromise;
-                  await new Promise(r => setTimeout(r, 10000)); // زيادة وقت الانتظار بعد التوجيه
-
-                  console.log("6. Checking target API...");
-                  await page.goto("https://www.multimango.com/api/omni-elo?capability=tts", { waitUntil: "networkidle2" });
-
-                  const body = await page.evaluate(() => document.body.innerText);
+                  // جلب محتوى الصفحة بالكامل
+                  const body = await page.locator("body").innerText();
                   console.log("API Result Snippet:", body.substring(0, 150));
 
-                  if (body.includes("NO_LANGUAGE_MATCHES") || body.includes("No comparison candidates") || body.includes("errorCode\":\"NO_LANGUAGE_MATCHES")) {
+                  if (body.includes("NO_LANGUAGE_MATCHES") || body.includes("No comparison candidates") || body.includes("errorCode")) {
                       console.log("Result: No tasks online.");
                   } else if (body.includes(".wav") || body.includes("scontent")) {
                       await sendTelegram("omni task online 🟢");
                       console.log("Result: Task detected! Telegram alerted.");
                   } else if (body.includes("Authentication required")) {
-                      console.log("Result: Failed to login properly. Still showing auth error.");
+                      console.log("Result: Still getting auth error. Session hijacked needed.");
                   } else {
-                      console.log("Result: Unknown response. Body length:", body.length);
+                      console.log("Result: Unknown. Full length:", body.length);
                   }
+
               } catch (err) {
-                  console.error("Execution failed at:", err.message);
+                  console.error("❌ Execution failed:", err.message);
               } finally {
                   await browser.close();
-                  console.log("Done.");
+                  console.log("🏁 Done.");
               }
           })();
           '
