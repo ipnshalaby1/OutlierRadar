@@ -15,8 +15,8 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Puppeteer and Axios
-        run: npm install puppeteer axios
+      - name: Install Puppeteer and Stealth Plugin
+        run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth axios
 
       - name: Run Script Directly
         env:
@@ -26,7 +26,9 @@ jobs:
           PASSWORD: ${{ secrets.PASSWORD }}
         run: |
           node -e '
-          const puppeteer = require("puppeteer");
+          const puppeteer = require("puppeteer-extra");
+          const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+          puppeteer.use(StealthPlugin());
           const axios = require("axios");
 
           async function sendTelegram(text) {
@@ -35,60 +37,123 @@ jobs:
           }
 
           (async () => {
-              console.log("1. Starting browser (Stealth mode)...");
+              console.log("1. Starting browser (Advanced Stealth mode)...");
               const browser = await puppeteer.launch({
                   headless: true,
-                  args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"]
+                  args: ["--no-sandbox", "--disable-setuid-sandbox"]
               });
               const page = await browser.newPage();
               
-              await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+              await page.setViewport({ width: 1280, height: 800 });
 
               try {
                   console.log("2. Navigating to login...");
-                  await page.goto("https://www.multimango.com/login", { waitUntil: "networkidle2" });
+                  await page.goto("https://www.multimango.com/login", { waitUntil: "networkidle0", timeout: 60000 });
 
-                  console.log("3. Waiting for Clerk form to load...");
-                  await new Promise(r => setTimeout(r, 6000));
+                  console.log("3. Waiting for form elements to stabilize...");
+                  await new Promise(r => setTimeout(r, 5000));
 
-                  console.log("4. Attempting Keyboard bypass for Terms...");
-                  // الضغط على زر التاب ثم المسطرة للموافقة على الشروط
-                  await page.keyboard.press("Tab");
-                  await new Promise(r => setTimeout(r, 500));
-                  await page.keyboard.press("Space");
-                  await new Promise(r => setTimeout(r, 1000));
-                  await page.keyboard.press("Enter");
+                  console.log("4. Attempting to accept terms...");
+                  try {
+                      // محاولة أولى للبحث عن الزر أو المربع
+                      const agreed = await page.evaluate(() => {
+                          const checkbox = document.querySelector("input[type=\"checkbox\"]");
+                          if (checkbox) {
+                              checkbox.click();
+                              return true;
+                          }
+                          const labels = Array.from(document.querySelectorAll("label, span, div, p"));
+                          const agreeText = labels.find(el => el.textContent && el.textContent.toLowerCase().includes("i agree"));
+                          if (agreeText) {
+                              agreeText.click();
+                              return true;
+                          }
+                          return false;
+                      });
+                      if (agreed) {
+                          console.log("Terms accepted via DOM manipulation.");
+                      } else {
+                          console.log("Terms checkbox not found via DOM. Proceeding...");
+                      }
+                  } catch (e) {
+                      console.log("Error finding terms:", e.message);
+                  }
+
                   await new Promise(r => setTimeout(r, 2000));
 
-                  console.log("5. Typing email...");
-                  // نستخدم محددات Clerk الخاصة
-                  await page.waitForSelector("input[name=\"identifier\"], input[type=\"email\"]", { timeout: 8000 });
-                  await page.type("input[name=\"identifier\"], input[type=\"email\"]", process.env.EMAIL);
+                  console.log("5. Searching for email input...");
+                  const emailSelectors = [
+                      "input[type=\"email\"]",
+                      "input[name=\"identifier\"]",
+                      "input[name=\"email\"]",
+                      "input[autocomplete=\"username\"]",
+                      ".cl-formFieldInput"
+                  ];
+                  
+                  let emailFound = false;
+                  for (let selector of emailSelectors) {
+                      try {
+                          await page.waitForSelector(selector, { timeout: 3000 });
+                          await page.type(selector, process.env.EMAIL);
+                          console.log(`Email entered using selector: ${selector}`);
+                          emailFound = true;
+                          break;
+                      } catch (e) {
+                          // Ignore and try next selector
+                      }
+                  }
+
+                  if (!emailFound) {
+                      throw new Error("Could not find email input field after trying multiple selectors.");
+                  }
+                  
                   await page.keyboard.press("Enter");
 
                   console.log("6. Waiting for password field...");
-                  await new Promise(r => setTimeout(r, 4000));
-                  await page.waitForSelector("input[name=\"password\"], input[type=\"password\"]", { timeout: 8000 });
-                  console.log("Typing password...");
-                  await page.type("input[name=\"password\"], input[type=\"password\"]", process.env.PASSWORD);
+                  await new Promise(r => setTimeout(r, 5000));
+                  
+                  console.log("7. Searching for password input...");
+                  const passwordSelectors = [
+                      "input[type=\"password\"]",
+                      "input[name=\"password\"]",
+                      "input[autocomplete=\"current-password\"]"
+                  ];
+
+                  let passwordFound = false;
+                  for (let selector of passwordSelectors) {
+                      try {
+                          await page.waitForSelector(selector, { timeout: 3000 });
+                          await page.type(selector, process.env.PASSWORD);
+                          console.log(`Password entered using selector: ${selector}`);
+                          passwordFound = true;
+                          break;
+                      } catch (e) {
+                          // Ignore and try next
+                      }
+                  }
+
+                  if (!passwordFound) {
+                      throw new Error("Could not find password input field.");
+                  }
+
                   await page.keyboard.press("Enter");
 
-                  console.log("7. Authenticating...");
-                  await new Promise(r => setTimeout(r, 8000));
+                  console.log("8. Authenticating...");
+                  await new Promise(r => setTimeout(r, 10000)); // وقت أطول لانتظار التحويل بعد الدخول
 
-                  console.log("8. Checking target API...");
+                  console.log("9. Checking target API...");
                   await page.goto("https://www.multimango.com/api/omni-elo?capability=tts", { waitUntil: "networkidle2" });
 
                   const body = await page.evaluate(() => document.body.innerText);
-                  console.log("API Result:", body.substring(0, 150));
+                  console.log("API Result Snippet:", body.substring(0, 150));
 
-                  if (body.includes("NO_LANGUAGE_MATCHES") || body.includes("No comparison candidates")) {
+                  if (body.includes("NO_LANGUAGE_MATCHES") || body.includes("No comparison candidates") || body.includes("errorCode\":\"NO_LANGUAGE_MATCHES")) {
                       console.log("Result: No tasks online.");
                   } else if (body.includes(".wav") || body.includes("scontent")) {
                       await sendTelegram("omni task online 🟢");
                       console.log("Result: Task detected! Telegram alerted.");
                   } else {
-                      console.log("Result: Unknown response structure.");
+                      console.log("Result: Unknown response structure. Full body length:", body.length);
                   }
               } catch (err) {
                   console.error("Execution failed at:", err.message);
