@@ -15,12 +15,12 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Playwright
+      - name: Install Playwright & Stealth
         run: |
-          npm install playwright axios
+          npm install playwright-extra puppeteer-extra-plugin-stealth axios playwright
           npx playwright install --with-deps chromium
 
-      - name: Run Mobile Simulation Script
+      - name: Run Stealth Sniper Script
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
@@ -28,11 +28,10 @@ jobs:
           PASSWORD: ${{ secrets.PASSWORD }}
         run: |
           node -e '
-          const { chromium, devices } = require("playwright");
+          const { chromium } = require("playwright-extra");
+          const stealth = require("puppeteer-extra-plugin-stealth")();
+          chromium.use(stealth);
           const axios = require("axios");
-
-          // إعدادات محاكاة آيفون 13 لخداع حماية الموقع
-          const iPhone = devices["iPhone 13"];
 
           async function sendTelegram(text) {
               const url = `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`;
@@ -40,49 +39,58 @@ jobs:
           }
 
           (async () => {
-              console.log("📱 1. Starting Playwright in Mobile Mode...");
+              console.log("🕵️ 1. Starting Playwright Stealth Sniper...");
               const browser = await chromium.launch({ headless: true });
               const context = await browser.newContext({
-                  ...iPhone,
-                  userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
+                  viewport: { width: 390, height: 844 },
+                  userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
               });
               const page = await context.newPage();
 
               try {
                   console.log("🌐 2. Navigating to login...");
-                  await page.goto("https://www.multimango.com/login", { waitUntil: "networkidle" });
+                  await page.goto("https://www.multimango.com/login", { waitUntil: "domcontentloaded" });
+                  
+                  console.log("⏳ 3. Waiting for Clerk form to bypass protection...");
+                  await page.waitForTimeout(6000);
+
+                  // فحص مبدئي سريع للشاشة
+                  const initialText = await page.evaluate(() => document.body.innerText);
+                  if(initialText.includes("Cloudflare") || initialText.includes("Checking your browser")) {
+                      console.log("⚠️ WARNING: Cloudflare protection detected!");
+                      await page.waitForTimeout(5000); // ننتظر كلاود فلير يمررنا
+                  }
+
+                  console.log("✅ 4. Clicking Terms Checkbox...");
+                  // استهداف نص الموافقة نفسه والضغط عليه
+                  const termsLabel = page.locator("label").filter({ hasText: "I agree" });
+                  await termsLabel.click({ force: true }).catch(() => console.log("   -> Could not click terms label smoothly, trying to force it..."));
+                  await page.waitForTimeout(1500);
+
+                  console.log("📧 5. Typing Email...");
+                  // استهداف الخانة بالـ Placeholder الموجود في صورتك تحديداً
+                  const emailInput = page.getByPlaceholder("Enter your email address");
+                  await emailInput.fill(process.env.EMAIL);
+                  await page.waitForTimeout(500);
+
+                  console.log("👉 6. Clicking Continue...");
+                  await page.getByRole("button", { name: "Continue", exact: false }).first().click();
+                  
+                  console.log("🔐 7. Waiting for Password field...");
                   await page.waitForTimeout(5000);
-
-                  console.log("✅ 3. Clicking the Terms TEXT (Not the checkbox)...");
-                  // الضغط على النص نفسه بدلا من المربع
-                  const termsText = page.locator("text=I agree to the Terms of Use");
-                  await termsText.click({ force: true });
-                  await page.waitForTimeout(2000);
                   
-                  console.log("📧 4. Typing Email...");
-                  // البحث عن خانة الإيميل وكتابته
-                  await page.locator("input[type=\"email\"], input[name=\"identifier\"]").fill(process.env.EMAIL);
-                  await page.waitForTimeout(1000);
+                  // استهداف خانة الباسورد
+                  const passInput = page.locator("input[type=\"password\"]");
+                  await passInput.fill(process.env.PASSWORD);
+                  await page.waitForTimeout(500);
 
-                  console.log("👉 5. Clicking Continue...");
-                  // الضغط على زرار Continue اللي ظهر في صورتك
-                  await page.locator("button:has-text(\"Continue\")").click();
-                  
-                  console.log("🔐 6. Waiting for Password field...");
-                  await page.waitForTimeout(4000); // انتظار تحميل الخطوة الثانية
-                  
-                  // كتابة الباسورد
-                  const passLocator = page.locator("input[type=\"password\"], input[name=\"password\"]");
-                  await passLocator.fill(process.env.PASSWORD);
-                  await page.waitForTimeout(1000);
+                  console.log("👉 8. Clicking Continue (Login)...");
+                  await page.getByRole("button", { name: "Continue", exact: false }).last().click();
 
-                  console.log("👉 7. Clicking Continue (Login)...");
-                  await page.locator("button:has-text(\"Continue\")").click();
+                  console.log("⏳ 9. Waiting for redirect...");
+                  await page.waitForTimeout(12000);
 
-                  console.log("⏳ 8. Waiting for Clerk authentication redirect...");
-                  await page.waitForTimeout(12000); // انتظار كافي جدا للموقع يحمل الصفحة الرئيسية
-
-                  console.log("🎯 9. Hitting the Target API...");
+                  console.log("🎯 10. Checking API...");
                   await page.goto("https://www.multimango.com/api/omni-elo?capability=tts", { waitUntil: "networkidle" });
 
                   const body = await page.locator("body").innerText();
@@ -94,11 +102,14 @@ jobs:
                       await sendTelegram("omni task online 🟢");
                       console.log("Result: Task detected! Telegram alerted.");
                   } else {
-                      console.log("Result: Unknown response. snippet:", body.substring(0, 50));
+                      console.log("Result: Unknown response.");
                   }
 
               } catch (err) {
                   console.error("❌ Execution failed:", err.message);
+                  // طباعة محتوى الشاشة بالكامل لمعرفة سبب الفشل (هل هو كلاود فلير أم لغة مختلفة)
+                  const text = await page.evaluate(() => document.body.innerText).catch(()=>"No text readable");
+                  console.log("📄 Page state at failure:", text.substring(0, 400).replace(/\n/g, " | "));
               } finally {
                   await browser.close();
                   console.log("🏁 Done.");
