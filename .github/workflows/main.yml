@@ -49,40 +49,32 @@ jobs:
 
               try {
                   console.log("🌐 2. Navigating to login...");
-                  await page.goto("https://www.multimango.com/login", { waitUntil: "domcontentloaded" });
+                  await page.goto("https://www.multimango.com/login", { waitUntil: "networkidle" });
                   
-                  console.log("⏳ 3. Waiting for Clerk form to bypass protection...");
+                  console.log("⏳ 3. Waiting for Clerk form to load...");
                   await page.waitForTimeout(6000);
 
-                  // فحص مبدئي سريع للشاشة
-                  const initialText = await page.evaluate(() => document.body.innerText);
-                  if(initialText.includes("Cloudflare") || initialText.includes("Checking your browser")) {
-                      console.log("⚠️ WARNING: Cloudflare protection detected!");
-                      await page.waitForTimeout(5000); // ننتظر كلاود فلير يمررنا
-                  }
-
-                  console.log("✅ 4. Clicking Terms Checkbox...");
-                  // استهداف نص الموافقة نفسه والضغط عليه
-                  const termsLabel = page.locator("label").filter({ hasText: "I agree" });
-                  await termsLabel.click({ force: true }).catch(() => console.log("   -> Could not click terms label smoothly, trying to force it..."));
-                  await page.waitForTimeout(1500);
+                  console.log("✅ 4. Clicking Checkbox via Role...");
+                  // استهداف المربع بصفته البرمجية وليس شكله أو نصه (يخترق Clerk بسهولة)
+                  const checkbox = page.getByRole("checkbox");
+                  await checkbox.click({ force: true });
+                  await page.waitForTimeout(2000);
 
                   console.log("📧 5. Typing Email...");
-                  // استهداف الخانة بالـ Placeholder الموجود في صورتك تحديداً
-                  const emailInput = page.getByPlaceholder("Enter your email address");
+                  // استهداف خانة الإيميل بنوعها برمجيا
+                  const emailInput = page.locator("input[type=\"email\"], input[name=\"identifier\"]").first();
                   await emailInput.fill(process.env.EMAIL);
-                  await page.waitForTimeout(500);
+                  await page.waitForTimeout(1000);
 
                   console.log("👉 6. Clicking Continue...");
                   await page.getByRole("button", { name: "Continue", exact: false }).first().click();
                   
                   console.log("🔐 7. Waiting for Password field...");
-                  await page.waitForTimeout(5000);
+                  await page.waitForTimeout(4000);
                   
-                  // استهداف خانة الباسورد
                   const passInput = page.locator("input[type=\"password\"]");
                   await passInput.fill(process.env.PASSWORD);
-                  await page.waitForTimeout(500);
+                  await page.waitForTimeout(1000);
 
                   console.log("👉 8. Clicking Continue (Login)...");
                   await page.getByRole("button", { name: "Continue", exact: false }).last().click();
@@ -107,9 +99,8 @@ jobs:
 
               } catch (err) {
                   console.error("❌ Execution failed:", err.message);
-                  // طباعة محتوى الشاشة بالكامل لمعرفة سبب الفشل (هل هو كلاود فلير أم لغة مختلفة)
-                  const text = await page.evaluate(() => document.body.innerText).catch(()=>"No text readable");
-                  console.log("📄 Page state at failure:", text.substring(0, 400).replace(/\n/g, " | "));
+                  const text = await page.evaluate(() => document.body.innerText).catch(()=>"No text");
+                  console.log("📄 Page state at failure:", text.substring(0, 300).replace(/\n/g, " | "));
               } finally {
                   await browser.close();
                   console.log("🏁 Done.");
