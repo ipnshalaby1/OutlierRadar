@@ -56,23 +56,23 @@ jobs:
                   
                   // التركيز على الصفحة لتفعيل الكيبورد
                   await page.bringToFront();
-                  await page.mouse.click(10, 10); // كليك عشوائي في زاوية الشاشة لتفعيل النافذة
+                  await page.mouse.click(10, 10);
                   await new Promise(r => setTimeout(r, 1000));
 
-                  // الخطوة 1: الضغط على Tab للوصول لمربع الشروط (عادة يكون أول عنصر)
+                  // الخطوة 1: الضغط على Tab للوصول لمربع الشروط
                   await page.keyboard.press("Tab");
                   await new Promise(r => setTimeout(r, 1000));
                   
                   // الخطوة 2: الموافقة على الشروط
                   await page.keyboard.press("Space");
                   console.log("   -> Pressed Space for terms.");
-                  await new Promise(r => setTimeout(r, 2000)); // انتظار الأنميشن
+                  await new Promise(r => setTimeout(r, 2000));
 
-                  // الخطوة 3: التنقل لحقل الإيميل (غالباً يحتاج ضغطة Tab واحدة أو اثنتين بعد الشروط)
+                  // الخطوة 3: التنقل لحقل الإيميل
                   await page.keyboard.press("Tab");
                   await new Promise(r => setTimeout(r, 500));
                   
-                  // الخطوة 4: كتابة الإيميل (الكتابة تتم في العنصر النشط حالياً أياً كان اسمه!)
+                  // الخطوة 4: كتابة الإيميل
                   await page.keyboard.type(process.env.EMAIL, { delay: 50 });
                   console.log("   -> Typed Email.");
                   await new Promise(r => setTimeout(r, 1000));
@@ -83,15 +83,19 @@ jobs:
                   await new Promise(r => setTimeout(r, 5000));
 
                   // الخطوة 6: كتابة الباسورد
-                  // Clerk أحياناً يفقد التركيز بعد الإيميل، نعطيه Tab احتياطي لو لزم الأمر، لكن غالباً التركيز ينتقل تلقائياً للباسورد
                   await page.keyboard.type(process.env.PASSWORD, { delay: 50 });
                   console.log("   -> Typed Password.");
                   await new Promise(r => setTimeout(r, 1000));
+                  
+                  // تجهيز انتظار التحميل قبل ضغط الانتر للباسورد
+                  const navigationPromise = page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30000 }).catch(() => null);
+                  
                   await page.keyboard.press("Enter");
                   console.log("   -> Pressed Enter after Password.");
 
-                  console.log("5. Waiting for authentication...");
-                  await new Promise(r => setTimeout(r, 10000));
+                  console.log("5. Waiting for authentication and redirect...");
+                  await navigationPromise; // ننتظر حتى يحمل الموقع الصفحة الرئيسية
+                  await new Promise(r => setTimeout(r, 8000)); // وقت إضافي كضمان
 
                   console.log("6. Checking target API...");
                   await page.goto("https://www.multimango.com/api/omni-elo?capability=tts", { waitUntil: "networkidle2" });
@@ -104,6 +108,8 @@ jobs:
                   } else if (body.includes(".wav") || body.includes("scontent")) {
                       await sendTelegram("omni task online 🟢");
                       console.log("Result: Task detected! Telegram alerted.");
+                  } else if (body.includes("Authentication required")) {
+                      console.log("Result: Failed to login properly. Still showing auth error.");
                   } else {
                       console.log("Result: Unknown response. Body length:", body.length);
                   }
