@@ -66,11 +66,14 @@ jobs:
                   console.log("⏳ 4. Waiting for Cloudflare/Clerk checks to pass...");
                   await page.waitForTimeout(8000);
 
-                  console.log("✅ 5. Human-clicking the Terms...");
-                  const termsTarget = page.locator("text=I agree").first();
-                  await cursor.click(termsTarget).catch(async () => {
-                      console.log("   -> Fallback to role checkbox");
-                      await cursor.click(page.getByRole("checkbox").first());
+                  console.log("✅ 5. Human-clicking the Terms Checkbox...");
+                  // محاولة الضغط على المربع باستخدام دوره كـ checkbox
+                  const checkbox = page.getByRole("checkbox");
+                  await cursor.click(checkbox).catch(async () => {
+                      console.log("   -> Fallback: Clicking text instead");
+                      // كبديل، محاولة الضغط على النص
+                      const termsTarget = page.locator("text=I agree").first();
+                      await cursor.click(termsTarget);
                   });
                   await page.waitForTimeout(2000);
 
@@ -85,7 +88,7 @@ jobs:
                   await cursor.click(continueBtn1);
                   
                   console.log("🔐 8. Waiting for Password field...");
-                  await page.waitForTimeout(5000);
+                  await page.waitForTimeout(5000); // انتظار الشاشة التانية زي الفيديو
                   
                   const passInput = page.locator("input[type=\"password\"]").first();
                   await cursor.click(passInput);
